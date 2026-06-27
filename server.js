@@ -48,6 +48,29 @@ const COMMON_LETTERS = 'aaaabbcdddeeeeeeffgghhiiijkklllmmnnnooopprrrsssstttuuuv�
 
 const rooms = {};
 
+// Cache ordnet.dk lookups to avoid repeated HTTP requests
+const ordnetCache = new Map();
+
+async function checkWordInOrdnet(word) {
+  if (ordnetCache.has(word)) return ordnetCache.get(word);
+  try {
+    const res = await fetch(
+      `https://ordnet.dk/ddo/ordbog?query=${encodeURIComponent(word)}`,
+      {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OrdBombe/1.0)' },
+        signal: AbortSignal.timeout(6000),
+      }
+    );
+    const html = await res.text();
+    const found = res.ok && !html.toLowerCase().includes('gav ikke resultat');
+    ordnetCache.set(word, found);
+    if (ordnetCache.size > 3000) ordnetCache.delete(ordnetCache.keys().next().value);
+    return found;
+  } catch {
+    return wordSet.has(word);
+  }
+}
+
 function randomChallenge(mode) {
   if (mode === 'names') {
     return NAME_LETTERS[Math.floor(Math.random() * NAME_LETTERS.length)];
@@ -148,7 +171,7 @@ function nextTurn(roomCode, keepSyllable = false) {
   }, 1000);
 }
 
-function validateWord(room, word) {
+async function validateWord(room, word) {
   const clean = (word || '').toLowerCase().trim();
   if (!clean) return { ok: false, msg: 'Tomt ord!' };
 
@@ -169,14 +192,14 @@ function validateWord(room, word) {
     if (!clean.includes(l1) || !clean.includes(l2)) {
       return { ok: false, msg: `Ordet skal indeholde både "${l1.toUpperCase()}" og "${l2.toUpperCase()}"!` };
     }
-    if (!wordSet.has(clean)) {
+    if (!await checkWordInOrdnet(clean)) {
       return { ok: false, msg: `"${clean}" er ikke et gyldigt dansk ord!` };
     }
   } else {
     if (!clean.includes(syl)) {
       return { ok: false, msg: `"${clean}" indeholder ikke "${syl}"!` };
     }
-    if (!wordSet.has(clean)) {
+    if (!await checkWordInOrdnet(clean)) {
       return { ok: false, msg: `"${clean}" er ikke et gyldigt dansk ord!` };
     }
   }
@@ -230,7 +253,7 @@ io.on('connection', socket => {
     setTimeout(() => nextTurn(roomCode, false), 1200);
   });
 
-  socket.on('submit-word', ({ roomCode, word }) => {
+  socket.on('submit-word', async ({ roomCode, word }) => {
     const room = rooms[roomCode];
     if (!room || room.state !== 'playing') return;
     const alive = activePlayers(room);
@@ -239,8 +262,16 @@ io.on('connection', socket => {
       socket.emit('word-rejected', { message: 'Det er ikke din tur!' }); return;
     }
     const clean = (word || '').toLowerCase().trim();
-    const result = validateWord(room, clean);
+    const result = await validateWord(room, clean);
     if (!result.ok) { socket.emit('word-rejected', { message: result.msg }); return; }
+
+    // Re-check after async ordnet.dk lookup — timer may have fired in the meantime
+    if (!room || room.state !== 'playing') return;
+    const aliveNow = activePlayers(room);
+    const currentNow = aliveNow[room.currentPlayerIndex];
+    if (!currentNow || currentNow.id !== socket.id) {
+      socket.emit('word-rejected', { message: 'Tiden løb ud!' }); return;
+    }
 
     room.usedWords.add(clean);
     const player = room.players.find(p => p.id === socket.id);
