@@ -4,118 +4,121 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ord Bombe 💣</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <!-- JOIN SCREEN -->
 <div id="screen-join" class="screen active">
-  <div class="join-card">
-    <div class="logo">
-      <span class="bomb-icon">💣</span>
+  <div class="join-wrap">
+    <div class="join-logo">
+      <div class="big-bomb">💣</div>
       <h1>Ord Bombe</h1>
-      <p class="subtitle">Det danske ordspil</p>
+      <p>Det sjove danske ordspil til vennerne</p>
     </div>
-    <div class="form-group">
-      <label for="playerName">Dit navn</label>
-      <input id="playerName" type="text" placeholder="Hvad hedder du?" maxlength="20" autocomplete="off">
+    <div class="join-card">
+      <div class="field">
+        <label>Hvad hedder du?</label>
+        <input id="playerName" type="text" placeholder="Dit navn" maxlength="20" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Rummets kode</label>
+        <input id="roomCode" type="text" placeholder="F.eks. TIGER" maxlength="6" autocomplete="off" oninput="this.value=this.value.toUpperCase()">
+      </div>
+      <button class="btn-join" onclick="joinRoom()">Gå ind 🚀</button>
+      <div id="join-error" class="err"></div>
     </div>
-    <div class="form-group">
-      <label for="roomCode">Rummets kode</label>
-      <input id="roomCode" type="text" placeholder="F.eks. TIGER" maxlength="6" autocomplete="off"
-             style="text-transform:uppercase">
-    </div>
-    <button id="joinBtn" class="btn btn-primary" onclick="joinRoom()">
-      Opret / Gå ind i rum
-    </button>
-    <div id="join-error" class="error-msg"></div>
-    <div class="how-to-play">
-      <h3>Sådan spiller du</h3>
-      <ol>
-        <li>Skriv et navn og vælg en rumkode</li>
-        <li>Del koden med dine venner</li>
-        <li>Vært starter spillet</li>
-        <li>Skriv et dansk ord der indeholder stavelsen</li>
-        <li>Ord der allerede er brugt tæller ikke!</li>
-        <li>Løber tiden ud, mister du et liv ❤️</li>
-        <li>Sidst overlevende vinder!</li>
-      </ol>
+    <div class="rules-box">
+      <h3>📋 Regler</h3>
+      <div class="rules-grid">
+        <div class="rule"><span>1</span>Del rumkoden med vennerne</div>
+        <div class="rule"><span>2</span>Skriv et ord der indeholder stavelsen</div>
+        <div class="rule"><span>3</span>Allerede brugte ord tæller ikke!</div>
+        <div class="rule"><span>4</span>Løber tiden ud → du mister et ❤️</div>
+        <div class="rule"><span>5</span>3 liv i alt — sidst overlevende vinder 🏆</div>
+      </div>
     </div>
   </div>
 </div>
 
 <!-- LOBBY SCREEN -->
 <div id="screen-lobby" class="screen">
-  <div class="lobby-card">
-    <div class="room-header">
-      <span class="bomb-icon-sm">💣</span>
-      <h2>Venteværelse</h2>
+  <div class="lobby-wrap">
+    <div class="lobby-top">
+      <h2>💣 Ord Bombe</h2>
+      <div class="code-box">
+        <span class="code-label">Rumkode:</span>
+        <span id="displayRoomCode" class="code-value"></span>
+        <button class="copy-btn" onclick="copyCode()">📋</button>
+      </div>
+      <p class="share-hint">Del koden med dine venner og vent på at de joiner!</p>
     </div>
-    <div class="room-code-display">
-      <span>Rummets kode:</span>
-      <strong id="displayRoomCode"></strong>
-      <button class="copy-btn" onclick="copyCode()" title="Kopiér kode">📋</button>
+    <div id="lobbySeats" class="lobby-seats"></div>
+    <div class="lobby-actions">
+      <button id="startBtn" class="btn-start" onclick="startGame()" style="display:none">
+        🎮 Start spillet!
+      </button>
+      <p id="waitingMsg" class="waiting-txt">Venter på at værten starter spillet...</p>
     </div>
-    <p class="lobby-hint">Del koden med dine venner!</p>
-    <div id="playerList" class="player-list"></div>
-    <button id="startBtn" class="btn btn-danger" onclick="startGame()" style="display:none">
-      Start spil!
-    </button>
-    <p id="waitingMsg" class="waiting-msg">Venter på at vært starter spillet...</p>
   </div>
 </div>
 
 <!-- GAME SCREEN -->
 <div id="screen-game" class="screen">
-  <div class="game-header">
-    <div class="room-code-small">Rum: <strong id="gameRoomCode"></strong></div>
-    <div id="gamePlayers" class="game-players"></div>
+  <div class="game-topbar">
+    <span class="room-tag">Rum: <b id="gameRoomCode"></b></span>
+    <span class="game-title">💣 Ord Bombe</span>
   </div>
 
-  <div class="game-center">
-    <div id="currentPlayerLabel" class="current-player-label"></div>
-
-    <div class="bomb-container">
-      <div id="bombDisplay" class="bomb">
-        <div id="timerCircle" class="timer-circle">
-          <svg viewBox="0 0 100 100">
-            <circle class="timer-bg" cx="50" cy="50" r="42"/>
-            <circle id="timerArc" class="timer-arc" cx="50" cy="50" r="42"/>
+  <!-- ROUND TABLE -->
+  <div class="table-scene" id="tableScene">
+    <div class="table-felt">
+      <div class="table-inner">
+        <div id="currentLabel" class="current-label"></div>
+        <div class="syllable-wrap">
+          <div class="syl-hint">Skriv et ord med:</div>
+          <div id="sylText" class="syl-big">—</div>
+        </div>
+        <div class="timer-wrap">
+          <svg class="timer-svg" viewBox="0 0 80 80">
+            <circle class="t-bg" cx="40" cy="40" r="34"/>
+            <circle id="tArc" class="t-arc" cx="40" cy="40" r="34"/>
           </svg>
-          <div id="timerNumber" class="timer-number">12</div>
+          <div id="tNum" class="t-num">12</div>
         </div>
       </div>
     </div>
-
-    <div class="syllable-display">
-      <div class="syllable-label">Skriv et ord med:</div>
-      <div id="syllableText" class="syllable-text">—</div>
-    </div>
-
-    <div id="wordInputArea" class="word-input-area" style="display:none">
-      <input id="wordInput" type="text" placeholder="Skriv et ord..." autocomplete="off"
-             autocorrect="off" autocapitalize="off" spellcheck="false"
-             oninput="this.value=this.value.toLowerCase()">
-      <button class="btn btn-success" onclick="submitWord()">Send ✓</button>
-    </div>
-    <div id="notYourTurn" class="not-your-turn">Vent på din tur...</div>
-    <div id="wordFeedback" class="word-feedback"></div>
+    <!-- player seats injected by JS -->
   </div>
 
-  <div id="wordHistory" class="word-history"></div>
+  <!-- INPUT -->
+  <div class="input-zone">
+    <div id="wordInputWrap" style="display:none" class="input-row">
+      <input id="wordInput" type="text" placeholder="Skriv et ord..." autocomplete="off"
+             autocorrect="off" autocapitalize="none" spellcheck="false">
+      <button class="btn-send" onclick="submitWord()">✓</button>
+    </div>
+    <div id="notYourTurn" class="not-turn">⏳ Vent på din tur...</div>
+    <div id="feedback" class="feedback-toast"></div>
+  </div>
+
+  <!-- HISTORY -->
+  <div id="wordHistory" class="history-row"></div>
 </div>
 
 <!-- GAME OVER SCREEN -->
 <div id="screen-gameover" class="screen">
-  <div class="gameover-card">
-    <div id="winnerDisplay" class="winner-display"></div>
-    <div id="finalScores" class="final-scores"></div>
-    <button id="playAgainBtn" class="btn btn-primary" onclick="playAgain()" style="display:none">
-      Spil igen!
-    </button>
-    <p id="waitingPlayAgain" class="waiting-msg"></p>
+  <div class="gameover-wrap">
+    <div id="winnerBox" class="winner-box"></div>
+    <div id="finalList" class="final-list"></div>
+    <button id="playAgainBtn" class="btn-again" onclick="playAgain()" style="display:none">🔄 Spil igen!</button>
+    <p id="waitAgain" class="waiting-txt"></p>
   </div>
 </div>
+
+<div id="confettiLayer" class="confetti-layer"></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="game.js"></script>

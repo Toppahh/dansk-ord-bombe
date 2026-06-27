@@ -12,29 +12,17 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const wordSet = new Set(danishWords.map(w => w.toLowerCase().trim()));
 
-const SYLLABLES = [
-  'an','en','er','et','ar','al','el','il','ol','ul',
-  'om','em','im','am','on','in','or','ur',
-  'nd','nt','ng','rd','rk','rm','rn','rt',
-  'st','sk','sp','sn','sl','sm',
-  'bl','br','dr','fl','gr','kl','kr','pl','pr','tr',
-  'den','der','det','ene','ere','ing','isk',
-  'bar','hed','lig','som','ren','sel',
-  'for','gen','han','hun','kan','man','men','ned',
-  'sen','sig','sin','sit','ste','ter','til','var','ved',
-  'and','ald','and','end','ind','und','ord','urd',
-  'ant','ent','int','ont','unt',
-];
-
-// Filter syllables to only those covered by our word list
-const coveredSyllables = SYLLABLES.filter(syl => {
-  return danishWords.some(w => w.toLowerCase().includes(syl));
-});
+// Tiers based on how many Danish words contain the syllable (measured against real wordlist)
+const EASY   = ['er','en','de','re','te','ne','et','an','ge','le','or','el','se','ke','ar','ve','ig','be','me','he','at','il','am','om','ed','nd','ng','sk'];
+const MEDIUM = ['st','ud','ag','tr','ind','sp','kr','ul','ner','ler','br','dr','pr','ser','rd','eg','od'];
+const HARD   = ['bl','kl','fl','pl','gr','fr','ent','ord','und','gl'];
 
 const rooms = {};
 
 function randomSyllable() {
-  return coveredSyllables[Math.floor(Math.random() * coveredSyllables.length)];
+  const r = Math.random();
+  const pool = r < 0.65 ? EASY : r < 0.90 ? MEDIUM : HARD;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function isValidWord(word, syllable) {
