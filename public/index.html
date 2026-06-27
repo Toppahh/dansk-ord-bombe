@@ -10,93 +10,115 @@
 </head>
 <body>
 
-<!-- JOIN SCREEN -->
+<!-- ══════════════ JOIN ══════════════ -->
 <div id="screen-join" class="screen active">
   <div class="join-wrap">
     <div class="join-logo">
-      <div class="big-bomb">💣</div>
+      <div class="big-bomb" id="lobbyBomb">💣</div>
       <h1>Ord Bombe</h1>
-      <p>Det sjove danske ordspil til vennerne</p>
+      <p>Det sjove danske ordspil</p>
     </div>
     <div class="join-card">
-      <div class="field">
-        <label>Hvad hedder du?</label>
-        <input id="playerName" type="text" placeholder="Dit navn" maxlength="20" autocomplete="off">
+      <div class="field"><label>Dit navn</label>
+        <input id="playerName" type="text" placeholder="Hvad hedder du?" maxlength="20" autocomplete="off">
       </div>
-      <div class="field">
-        <label>Rummets kode</label>
+      <div class="field"><label>Rumkode</label>
         <input id="roomCode" type="text" placeholder="F.eks. TIGER" maxlength="6" autocomplete="off" oninput="this.value=this.value.toUpperCase()">
       </div>
-      <button class="btn-join" onclick="joinRoom()">Gå ind 🚀</button>
+      <button class="btn-join" onclick="joinRoom()">Kom ind 🚀</button>
       <div id="join-error" class="err"></div>
     </div>
     <div class="rules-box">
       <h3>📋 Regler</h3>
-      <div class="rules-grid">
+      <div class="rules-list">
         <div class="rule"><span>1</span>Del rumkoden med vennerne</div>
-        <div class="rule"><span>2</span>Skriv et ord der indeholder stavelsen</div>
-        <div class="rule"><span>3</span>Allerede brugte ord tæller ikke!</div>
-        <div class="rule"><span>4</span>Løber tiden ud → du mister et ❤️</div>
-        <div class="rule"><span>5</span>3 liv i alt — sidst overlevende vinder 🏆</div>
+        <div class="rule"><span>2</span>Skriv et <b>dansk</b> ord der indeholder stavelsen</div>
+        <div class="rule"><span>3</span>Længere ord = flere point ⭐</div>
+        <div class="rule"><span>4</span>Brugt ord eller forkert → ingen point</div>
+        <div class="rule"><span>5</span>Timer = 0 → BOOM 💥 og du mister et ❤️</div>
+        <div class="rule"><span>6</span>Kan du ikke finde et ord? Næste spiller får <b>samme stavelse</b>!</div>
+        <div class="rule"><span>7</span>Flest point vinder 🏆</div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- LOBBY SCREEN -->
+<!-- ══════════════ LOBBY ══════════════ -->
 <div id="screen-lobby" class="screen">
   <div class="lobby-wrap">
     <div class="lobby-top">
-      <h2>💣 Ord Bombe</h2>
+      <h2>💣 Venteværelse</h2>
       <div class="code-box">
-        <span class="code-label">Rumkode:</span>
-        <span id="displayRoomCode" class="code-value"></span>
+        <span class="code-lbl">Kode:</span>
+        <span id="displayRoomCode" class="code-val"></span>
         <button class="copy-btn" onclick="copyCode()">📋</button>
       </div>
-      <p class="share-hint">Del koden med dine venner og vent på at de joiner!</p>
+      <p class="share-hint">📲 Del koden med vennerne!</p>
     </div>
     <div id="lobbySeats" class="lobby-seats"></div>
     <div class="lobby-actions">
-      <button id="startBtn" class="btn-start" onclick="startGame()" style="display:none">
-        🎮 Start spillet!
-      </button>
-      <p id="waitingMsg" class="waiting-txt">Venter på at værten starter spillet...</p>
+      <button id="startBtn" class="btn-start" onclick="startGame()" style="display:none">🎮 Start spillet!</button>
+      <p id="waitingMsg" class="waiting-txt">Venter på at vært trykker start...</p>
     </div>
   </div>
 </div>
 
-<!-- GAME SCREEN -->
+<!-- ══════════════ GAME ══════════════ -->
 <div id="screen-game" class="screen">
   <div class="game-topbar">
     <span class="room-tag">Rum: <b id="gameRoomCode"></b></span>
-    <span class="game-title">💣 Ord Bombe</span>
+    <span class="game-brand">💣 Ord Bombe</span>
+    <div class="topbar-btns">
+      <button class="icon-btn" id="soundBtn" onclick="toggleSound()" title="Lyd til/fra">🔊</button>
+      <button class="icon-btn" id="chatToggle" onclick="toggleChat()" title="Chat">💬</button>
+    </div>
   </div>
 
-  <!-- ROUND TABLE -->
-  <div class="table-scene" id="tableScene">
-    <div class="table-felt">
-      <div class="table-inner">
-        <div id="currentLabel" class="current-label"></div>
-        <div class="syllable-wrap">
-          <div class="syl-hint">Skriv et ord med:</div>
-          <div id="sylText" class="syl-big">—</div>
-        </div>
-        <div class="timer-wrap">
-          <svg class="timer-svg" viewBox="0 0 80 80">
-            <circle class="t-bg" cx="40" cy="40" r="34"/>
-            <circle id="tArc" class="t-arc" cx="40" cy="40" r="34"/>
-          </svg>
-          <div id="tNum" class="t-num">12</div>
+  <div class="game-body">
+    <!-- TABLE SCENE -->
+    <div class="table-scene" id="tableScene">
+      <div class="table-felt" id="tableFelt">
+        <div class="table-inner">
+          <div id="currentLabel" class="current-label">—</div>
+
+          <!-- BOMB VISUAL -->
+          <div class="bomb-visual" id="bombVisual">
+            <div class="fuse-row">
+              <div class="fuse-track"><div class="fuse-bar" id="fuseBar"></div></div>
+              <div class="spark" id="spark">✨</div>
+            </div>
+            <div class="bomb-emoji" id="bombEmoji">💣</div>
+          </div>
+
+          <div class="timer-num" id="timerNum">12</div>
+
+          <div class="syl-area">
+            <div class="syl-hint">Skriv et ord med:</div>
+            <div id="sylText" class="syl-big">—</div>
+          </div>
         </div>
       </div>
+      <!-- Player seats injected by JS -->
     </div>
-    <!-- player seats injected by JS -->
+
+    <!-- CHAT PANEL -->
+    <div class="chat-panel" id="chatPanel">
+      <div class="chat-header">
+        <span>💬 Chat</span>
+        <button class="chat-close" onclick="toggleChat()">✕</button>
+      </div>
+      <div id="chatMessages" class="chat-messages"></div>
+      <div class="chat-input-row">
+        <input id="chatInput" type="text" placeholder="Skriv en besked..." maxlength="150" autocomplete="off">
+        <button class="chat-send" onclick="sendChat()">➤</button>
+      </div>
+    </div>
   </div>
 
-  <!-- INPUT -->
+  <!-- INPUT ZONE -->
   <div class="input-zone">
-    <div id="wordInputWrap" style="display:none" class="input-row">
-      <input id="wordInput" type="text" placeholder="Skriv et ord..." autocomplete="off"
+    <div id="wordInputWrap" class="input-row" style="display:none">
+      <input id="wordInput" type="text" placeholder="Skriv et dansk ord..." autocomplete="off"
              autocorrect="off" autocapitalize="none" spellcheck="false">
       <button class="btn-send" onclick="submitWord()">✓</button>
     </div>
@@ -104,11 +126,11 @@
     <div id="feedback" class="feedback-toast"></div>
   </div>
 
-  <!-- HISTORY -->
+  <!-- WORD HISTORY -->
   <div id="wordHistory" class="history-row"></div>
 </div>
 
-<!-- GAME OVER SCREEN -->
+<!-- ══════════════ GAME OVER ══════════════ -->
 <div id="screen-gameover" class="screen">
   <div class="gameover-wrap">
     <div id="winnerBox" class="winner-box"></div>
@@ -118,7 +140,9 @@
   </div>
 </div>
 
+<!-- EFFECTS -->
 <div id="confettiLayer" class="confetti-layer"></div>
+<div id="screenFlash" class="screen-flash"></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="game.js"></script>
