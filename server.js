@@ -74,9 +74,12 @@ function nextTurn(roomCode, keepSyllable = false) {
   if (!keepSyllable) {
     room.currentSyllable = randomSyllable();
     room.syllableFailCount = 0;
+    room.syllableChanges = (room.syllableChanges || 0) + 1;
   }
 
-  room.timeLeft = 12;
+  // Speed up after every 5 syllable changes (min 6s)
+  const speedBonus = Math.floor((room.syllableChanges || 0) / 5);
+  room.timeLeft = Math.max(6, 12 - speedBonus);
   const current = alive[room.currentPlayerIndex];
 
   io.to(roomCode).emit('new-turn', {
@@ -84,8 +87,10 @@ function nextTurn(roomCode, keepSyllable = false) {
     currentPlayerName: current.name,
     syllable: room.currentSyllable,
     timeLeft: room.timeLeft,
+    maxTime: room.timeLeft,
     players: room.players,
     keptSyllable: keepSyllable,
+    round: room.syllableChanges || 0,
   });
 
   room.timer = setInterval(() => {
@@ -149,6 +154,7 @@ io.on('connection', socket => {
     room.usedWords = new Set();
     room.currentPlayerIndex = -1;
     room.syllableFailCount = 0;
+    room.syllableChanges = 0;
     room.players.forEach(p => { p.lives = 3; p.points = 0; p.eliminated = false; });
     io.to(roomCode).emit('game-started', { players: room.players });
     setTimeout(() => nextTurn(roomCode, false), 1200);

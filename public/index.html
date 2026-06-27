@@ -67,7 +67,7 @@
 <div id="screen-game" class="screen">
   <div class="game-topbar">
     <span class="room-tag">Rum: <b id="gameRoomCode"></b></span>
-    <span class="game-brand">💣 Ord Bombe</span>
+    <span class="game-brand">💣 Ord Bombe <span id="speedTag" class="speed-tag"></span></span>
     <div class="topbar-btns">
       <button class="icon-btn" id="soundBtn" onclick="toggleSound()" title="Lyd til/fra">🔊</button>
       <button class="icon-btn" id="chatToggle" onclick="toggleChat()" title="Chat">💬</button>
@@ -93,7 +93,7 @@
           <div class="timer-num" id="timerNum">12</div>
 
           <div class="syl-area">
-            <div class="syl-hint">Skriv et ord med:</div>
+            <div id="sylHint" class="syl-hint">Skriv et ord med:</div>
             <div id="sylText" class="syl-big">—</div>
           </div>
         </div>
