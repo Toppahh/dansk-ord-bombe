@@ -42,7 +42,7 @@ const MEDIUM = ['st','ud','ag','tr','ind','sp','kr','ul','ner','ler','br','dr','
 const HARD   = ['bl','kl','fl','pl','gr','fr','ent','ord','und'];
 
 // Letters for names mode (letters with many Danish names starting with them)
-const NAME_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','R','S','T','V','Å'];
+const NAME_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','R','S','T','U','V','W','Y','Æ','Ø','Å'];
 // Weighted common Danish letters for 2-letters mode
 const COMMON_LETTERS = 'aaaabbcdddeeeeeeffgghhiiijkklllmmnnnooopprrrsssstttuuuvæøå'.split('');
 
