@@ -35,8 +35,6 @@ const wordSet = new Set(
   danishWords.map(w => w.toLowerCase().trim()).filter(w => w.length >= 2 && !ENGLISH_ONLY.has(w))
 );
 const nameSet = new Set(danishNames.map(w => w.toLowerCase().trim()));
-const wordArray = [...wordSet].sort((a, b) => b.length - a.length);
-const nameArray = [...nameSet].sort((a, b) => b.length - a.length);
 
 // Normal mode syllables
 const EASY   = ['er','en','de','re','te','ne','et','an','ge','le','or','el','se','ke','ar','ve','ig','be','me','he','at','il','am','om','ed','nd','ng','sk'];
@@ -309,27 +307,6 @@ io.on('connection', socket => {
     room.currentPlayerIndex = -1; room.syllableFailCount = 0;
     room.players.forEach(p => { p.lives = 3; p.points = 0; p.eliminated = false; });
     io.to(roomCode).emit('game-reset', { room: sanitize(room) });
-  });
-
-  socket.on('cheat-word', ({ roomCode }) => {
-    const room = rooms[roomCode];
-    if (!room || room.state !== 'playing') return;
-    const alive = activePlayers(room);
-    const current = alive[room.currentPlayerIndex];
-    if (!current || current.id !== socket.id) return;
-    const mode = room.mode || 'normal';
-    const syl = room.currentSyllable;
-    let word = null;
-    if (mode === 'names') {
-      word = nameArray.find(w => w.startsWith(syl.toLowerCase()) && !room.usedWords.has(w)) ?? null;
-    } else if (mode === 'letters') {
-      const [l1, l2] = syl.split('+');
-      word = wordArray.find(w => w.includes(l1) && w.includes(l2) && !room.usedWords.has(w)) ?? null;
-    } else {
-      word = wordArray.find(w => w.includes(syl) && !room.usedWords.has(w)) ?? null;
-    }
-    if (word) ordnetCache.set(word, true);
-    socket.emit('cheat-suggestion', { word });
   });
 
   socket.on('disconnect', () => {
