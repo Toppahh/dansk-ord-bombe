@@ -1,0 +1,20 @@
+{
+  "name": "dansk-ord-bombe",
+  "version": "1.0.0",
+  "description": "Dansk Word Bomb multiplayer spil",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
