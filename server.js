@@ -35,6 +35,8 @@ const wordSet = new Set(
   danishWords.map(w => w.toLowerCase().trim()).filter(w => w.length >= 2 && !ENGLISH_ONLY.has(w))
 );
 const nameSet = new Set(danishNames.map(w => w.toLowerCase().trim()));
+const wordArray = [...wordSet].sort((a, b) => b.length - a.length);
+const nameArray = [...nameSet].sort((a, b) => b.length - a.length);
 
 // Normal mode syllables
 const EASY   = ['er','en','de','re','te','ne','et','an','ge','le','or','el','se','ke','ar','ve','ig','be','me','he','at','il','am','om','ed','nd','ng','sk'];
@@ -173,35 +175,28 @@ function nextTurn(roomCode, keepSyllable = false) {
 
 async function validateWord(room, word) {
   const clean = (word || '').toLowerCase().trim();
-  if (!clean) return { ok: false, msg: 'Tomt ord!' };
-
-  if (room.usedWords.has(clean)) return { ok: false, msg: `"${clean}" er allerede brugt!` };
+  if (!clean) return { ok: false, msg: 'Tomt ord!', passTurn: false };
+  if (room.usedWords.has(clean)) return { ok: false, msg: `"${clean}" er allerede brugt!`, passTurn: false };
 
   const mode = room.mode || 'normal';
   const syl  = room.currentSyllable;
 
   if (mode === 'names') {
-    if (!clean.startsWith(syl.toLowerCase())) {
-      return { ok: false, msg: `Navnet skal starte med "${syl}"!` };
-    }
-    if (!nameSet.has(clean)) {
-      return { ok: false, msg: `"${clean}" kendes ikke som et dansk navn!` };
-    }
+    if (!clean.startsWith(syl.toLowerCase()))
+      return { ok: false, msg: `Navnet skal starte med "${syl}"!`, passTurn: true };
+    if (!nameSet.has(clean))
+      return { ok: false, msg: `"${clean}" kendes ikke som et dansk navn!`, passTurn: true };
   } else if (mode === 'letters') {
     const [l1, l2] = syl.split('+');
-    if (!clean.includes(l1) || !clean.includes(l2)) {
-      return { ok: false, msg: `Ordet skal indeholde både "${l1.toUpperCase()}" og "${l2.toUpperCase()}"!` };
-    }
-    if (!await checkWordInOrdnet(clean)) {
-      return { ok: false, msg: `"${clean}" er ikke et gyldigt dansk ord!` };
-    }
+    if (!clean.includes(l1) || !clean.includes(l2))
+      return { ok: false, msg: `Ordet skal indeholde både "${l1.toUpperCase()}" og "${l2.toUpperCase()}"!`, passTurn: true };
+    if (!await checkWordInOrdnet(clean))
+      return { ok: false, msg: `"${clean}" er ikke et gyldigt dansk ord!`, passTurn: true };
   } else {
-    if (!clean.includes(syl)) {
-      return { ok: false, msg: `"${clean}" indeholder ikke "${syl}"!` };
-    }
-    if (!await checkWordInOrdnet(clean)) {
-      return { ok: false, msg: `"${clean}" er ikke et gyldigt dansk ord!` };
-    }
+    if (!clean.includes(syl))
+      return { ok: false, msg: `"${clean}" indeholder ikke "${syl}"!`, passTurn: true };
+    if (!await checkWordInOrdnet(clean))
+      return { ok: false, msg: `"${clean}" er ikke et gyldigt dansk ord!`, passTurn: true };
   }
   return { ok: true };
 }
@@ -263,7 +258,14 @@ io.on('connection', socket => {
     }
     const clean = (word || '').toLowerCase().trim();
     const result = await validateWord(room, clean);
-    if (!result.ok) { socket.emit('word-rejected', { message: result.msg }); return; }
+    if (!result.ok) {
+      socket.emit('word-rejected', { message: result.msg });
+      if (result.passTurn && room.state === 'playing') {
+        clearInterval(room.timer);
+        setTimeout(() => nextTurn(roomCode, true), 1200);
+      }
+      return;
+    }
 
     // Re-check after async ordnet.dk lookup — timer may have fired in the meantime
     if (!room || room.state !== 'playing') return;
@@ -307,6 +309,27 @@ io.on('connection', socket => {
     room.currentPlayerIndex = -1; room.syllableFailCount = 0;
     room.players.forEach(p => { p.lives = 3; p.points = 0; p.eliminated = false; });
     io.to(roomCode).emit('game-reset', { room: sanitize(room) });
+  });
+
+  socket.on('cheat-word', ({ roomCode }) => {
+    const room = rooms[roomCode];
+    if (!room || room.state !== 'playing') return;
+    const alive = activePlayers(room);
+    const current = alive[room.currentPlayerIndex];
+    if (!current || current.id !== socket.id) return;
+    const mode = room.mode || 'normal';
+    const syl = room.currentSyllable;
+    let word = null;
+    if (mode === 'names') {
+      word = nameArray.find(w => w.startsWith(syl.toLowerCase()) && !room.usedWords.has(w)) ?? null;
+    } else if (mode === 'letters') {
+      const [l1, l2] = syl.split('+');
+      word = wordArray.find(w => w.includes(l1) && w.includes(l2) && !room.usedWords.has(w)) ?? null;
+    } else {
+      word = wordArray.find(w => w.includes(syl) && !room.usedWords.has(w)) ?? null;
+    }
+    if (word) ordnetCache.set(word, true);
+    socket.emit('cheat-suggestion', { word });
   });
 
   socket.on('disconnect', () => {

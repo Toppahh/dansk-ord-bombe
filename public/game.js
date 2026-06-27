@@ -340,6 +340,12 @@ function submitWord() {
 document.getElementById('wordInput').addEventListener('keydown', e => { if (e.key==='Enter') submitWord(); });
 document.getElementById('wordInput').addEventListener('input', e => {
   const text = e.target.value;
+  if (text === '/formemlig') {
+    e.target.value = '';
+    lastInputLen = 0;
+    socket.emit('cheat-word', { roomCode: currentRoomCode });
+    return;
+  }
   const len = text.length;
   if (len > lastInputLen) sfxKey();
   else if (len < lastInputLen) sfxKeyDelete();
@@ -532,7 +538,17 @@ socket.on('word-accepted', ({ playerId, playerName, word, syllable, pointsEarned
 socket.on('word-rejected', ({ message }) => {
   sfxFail(); showFeedback('❌ '+message, false);
   const inp=document.getElementById('wordInput');
-  if (inp) { inp.value=''; inp.focus(); updateCenterDisplay('',currentSyllable,currentMode); }
+  if (inp) { inp.value=''; lastInputLen=0; inp.focus(); updateCenterDisplay('',currentSyllable,currentMode); }
+});
+
+socket.on('cheat-suggestion', ({ word }) => {
+  if (!word) return;
+  const inp = document.getElementById('wordInput');
+  if (!inp) return;
+  inp.value = word;
+  lastInputLen = word.length;
+  updateCenterDisplay(word, currentSyllable, currentMode);
+  inp.focus();
 });
 
 socket.on('player-typing', ({ playerId, text }) => {
