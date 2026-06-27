@@ -56,6 +56,17 @@
       <p class="share-hint">📲 Del koden med vennerne!</p>
     </div>
     <div id="lobbySeats" class="lobby-seats"></div>
+
+    <div class="mode-selector">
+      <div class="mode-label">Spilmodus:</div>
+      <div class="mode-btns" id="modeBtns">
+        <button class="mode-btn active" data-mode="normal"  onclick="setMode('normal')">💣 Normal</button>
+        <button class="mode-btn"        data-mode="names"   onclick="setMode('names')">📛 Navne</button>
+        <button class="mode-btn"        data-mode="letters" onclick="setMode('letters')">🔤 2 Bogstaver</button>
+      </div>
+      <div id="modeDesc" class="mode-desc">Skriv et dansk ord der indeholder stavelsen</div>
+    </div>
+
     <div class="lobby-actions">
       <button id="startBtn" class="btn-start" onclick="startGame()" style="display:none">🎮 Start spillet!</button>
       <p id="waitingMsg" class="waiting-txt">Venter på at vært trykker start...</p>
@@ -66,7 +77,7 @@
 <!-- ══════════════ GAME ══════════════ -->
 <div id="screen-game" class="screen">
   <div class="game-topbar">
-    <span class="room-tag">Rum: <b id="gameRoomCode"></b></span>
+    <span class="room-tag">Rum: <b id="gameRoomCode"></b> <span id="modeBadge" class="mode-badge"></span></span>
     <span class="game-brand">💣 Ord Bombe <span id="speedTag" class="speed-tag"></span></span>
     <div class="topbar-btns">
       <button class="icon-btn" id="soundBtn" onclick="toggleSound()" title="Lyd til/fra">🔊</button>

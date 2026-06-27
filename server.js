@@ -3,13 +3,13 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const danishWords = require('./words/danish-words');
+const danishNames = require('./words/danish-names');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Filter out common English-only words
 const ENGLISH_ONLY = new Set([
   'the','this','that','with','from','have','been','will','would','could','should',
   'their','there','these','those','them','then','than','about','into','over',
@@ -34,14 +34,30 @@ const ENGLISH_ONLY = new Set([
 const wordSet = new Set(
   danishWords.map(w => w.toLowerCase().trim()).filter(w => w.length >= 2 && !ENGLISH_ONLY.has(w))
 );
+const nameSet = new Set(danishNames.map(w => w.toLowerCase().trim()));
 
+// Normal mode syllables
 const EASY   = ['er','en','de','re','te','ne','et','an','ge','le','or','el','se','ke','ar','ve','ig','be','me','he','at','il','am','om','ed','nd','ng','sk'];
 const MEDIUM = ['st','ud','ag','tr','ind','sp','kr','ul','ner','ler','br','dr','pr','ser','rd','eg','od'];
 const HARD   = ['bl','kl','fl','pl','gr','fr','ent','ord','und'];
 
+// Letters for names mode (letters with many Danish names starting with them)
+const NAME_LETTERS = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','R','S','T','V','Å'];
+// Weighted common Danish letters for 2-letters mode
+const COMMON_LETTERS = 'aaaabbcdddeeeeeeffgghhiiijkklllmmnnnooopprrrsssstttuuuvæøå'.split('');
+
 const rooms = {};
 
-function randomSyllable() {
+function randomChallenge(mode) {
+  if (mode === 'names') {
+    return NAME_LETTERS[Math.floor(Math.random() * NAME_LETTERS.length)];
+  }
+  if (mode === 'letters') {
+    const l1 = COMMON_LETTERS[Math.floor(Math.random() * COMMON_LETTERS.length)];
+    let l2;
+    do { l2 = COMMON_LETTERS[Math.floor(Math.random() * COMMON_LETTERS.length)]; } while (l2 === l1);
+    return l1 + '+' + l2;
+  }
   const r = Math.random();
   const pool = r < 0.65 ? EASY : r < 0.90 ? MEDIUM : HARD;
   return pool[Math.floor(Math.random() * pool.length)];
@@ -56,9 +72,19 @@ function endGame(roomCode) {
   if (!room) return;
   clearInterval(room.timer);
   room.state = 'game-over';
-  const sorted = [...room.players].sort((a, b) => b.points - a.points);
-  const winner = sorted[0];
-  io.to(roomCode).emit('game-over', { winner: { id: winner.id, name: winner.name, points: winner.points }, players: room.players });
+  const alive = activePlayers(room);
+  let winner;
+  if (alive.length >= 1) {
+    // Last survivor wins — if somehow multiple survive, highest points among alive
+    winner = [...alive].sort((a, b) => b.points - a.points)[0];
+  } else {
+    // Everyone eliminated — highest points overall
+    winner = [...room.players].sort((a, b) => b.points - a.points)[0];
+  }
+  io.to(roomCode).emit('game-over', {
+    winner: { id: winner.id, name: winner.name, points: winner.points },
+    players: room.players,
+  });
 }
 
 function nextTurn(roomCode, keepSyllable = false) {
@@ -72,12 +98,11 @@ function nextTurn(roomCode, keepSyllable = false) {
   room.currentPlayerIndex = (room.currentPlayerIndex + 1) % alive.length;
 
   if (!keepSyllable) {
-    room.currentSyllable = randomSyllable();
+    room.currentSyllable = randomChallenge(room.mode || 'normal');
     room.syllableFailCount = 0;
     room.syllableChanges = (room.syllableChanges || 0) + 1;
   }
 
-  // Speed up after every 5 syllable changes (min 6s)
   const speedBonus = Math.floor((room.syllableChanges || 0) / 5);
   room.timeLeft = Math.max(6, 12 - speedBonus);
   const current = alive[room.currentPlayerIndex];
@@ -91,6 +116,7 @@ function nextTurn(roomCode, keepSyllable = false) {
     players: room.players,
     keptSyllable: keepSyllable,
     round: room.syllableChanges || 0,
+    mode: room.mode || 'normal',
   });
 
   room.timer = setInterval(() => {
@@ -115,11 +141,46 @@ function nextTurn(roomCode, keepSyllable = false) {
       if (stillAlive.length <= 1) { endGame(roomCode); return; }
 
       room.syllableFailCount = (room.syllableFailCount || 0) + 1;
-      const keep = room.syllableFailCount < stillAlive.length; // change syllable once all alive players have failed
+      const keep = room.syllableFailCount < stillAlive.length;
       room.currentPlayerIndex = (room.currentPlayerIndex - 1 + stillAlive.length) % stillAlive.length;
       setTimeout(() => nextTurn(roomCode, keep), 2200);
     }
   }, 1000);
+}
+
+function validateWord(room, word) {
+  const clean = (word || '').toLowerCase().trim();
+  if (!clean) return { ok: false, msg: 'Tomt ord!' };
+
+  if (room.usedWords.has(clean)) return { ok: false, msg: `"${clean}" er allerede brugt!` };
+
+  const mode = room.mode || 'normal';
+  const syl  = room.currentSyllable;
+
+  if (mode === 'names') {
+    if (!clean.startsWith(syl.toLowerCase())) {
+      return { ok: false, msg: `Navnet skal starte med "${syl}"!` };
+    }
+    if (!nameSet.has(clean)) {
+      return { ok: false, msg: `"${clean}" kendes ikke som et dansk navn!` };
+    }
+  } else if (mode === 'letters') {
+    const [l1, l2] = syl.split('+');
+    if (!clean.includes(l1) || !clean.includes(l2)) {
+      return { ok: false, msg: `Ordet skal indeholde både "${l1.toUpperCase()}" og "${l2.toUpperCase()}"!` };
+    }
+    if (!wordSet.has(clean)) {
+      return { ok: false, msg: `"${clean}" er ikke et gyldigt dansk ord!` };
+    }
+  } else {
+    if (!clean.includes(syl)) {
+      return { ok: false, msg: `"${clean}" indeholder ikke "${syl}"!` };
+    }
+    if (!wordSet.has(clean)) {
+      return { ok: false, msg: `"${clean}" er ikke et gyldigt dansk ord!` };
+    }
+  }
+  return { ok: true };
 }
 
 io.on('connection', socket => {
@@ -128,7 +189,7 @@ io.on('connection', socket => {
     const name = (playerName || '').trim().slice(0, 20) || 'Spiller';
     if (!rooms[code]) {
       rooms[code] = {
-        code, state: 'lobby',
+        code, state: 'lobby', mode: 'normal',
         players: [{ id: socket.id, name, lives: 3, points: 0, isHost: true, eliminated: false }],
         currentPlayerIndex: -1, currentSyllable: '', syllableFailCount: 0,
         usedWords: new Set(), timer: null, timeLeft: 12,
@@ -146,6 +207,15 @@ io.on('connection', socket => {
     }
   });
 
+  socket.on('set-mode', ({ roomCode, mode }) => {
+    const room = rooms[roomCode];
+    if (!room || !room.players.find(p => p.id === socket.id && p.isHost)) return;
+    if (['normal','names','letters'].includes(mode)) {
+      room.mode = mode;
+      io.to(roomCode).emit('mode-changed', { mode });
+    }
+  });
+
   socket.on('start-game', ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room || !room.players.find(p => p.id === socket.id && p.isHost)) return;
@@ -156,7 +226,7 @@ io.on('connection', socket => {
     room.syllableFailCount = 0;
     room.syllableChanges = 0;
     room.players.forEach(p => { p.lives = 3; p.points = 0; p.eliminated = false; });
-    io.to(roomCode).emit('game-started', { players: room.players });
+    io.to(roomCode).emit('game-started', { players: room.players, mode: room.mode || 'normal' });
     setTimeout(() => nextTurn(roomCode, false), 1200);
   });
 
@@ -165,12 +235,12 @@ io.on('connection', socket => {
     if (!room || room.state !== 'playing') return;
     const alive = activePlayers(room);
     const current = alive[room.currentPlayerIndex];
-    if (!current || current.id !== socket.id) { socket.emit('word-rejected', { message: 'Det er ikke din tur!' }); return; }
+    if (!current || current.id !== socket.id) {
+      socket.emit('word-rejected', { message: 'Det er ikke din tur!' }); return;
+    }
     const clean = (word || '').toLowerCase().trim();
-    if (!clean) return;
-    if (room.usedWords.has(clean)) { socket.emit('word-rejected', { message: `"${clean}" er allerede brugt!` }); return; }
-    if (!wordSet.has(clean)) { socket.emit('word-rejected', { message: `"${clean}" er ikke et gyldigt dansk ord!` }); return; }
-    if (!clean.includes(room.currentSyllable)) { socket.emit('word-rejected', { message: `"${clean}" indeholder ikke "${room.currentSyllable}"!` }); return; }
+    const result = validateWord(room, clean);
+    if (!result.ok) { socket.emit('word-rejected', { message: result.msg }); return; }
 
     room.usedWords.add(clean);
     const player = room.players.find(p => p.id === socket.id);
@@ -182,6 +252,7 @@ io.on('connection', socket => {
       playerId: socket.id, playerName: current.name,
       word: clean, syllable: room.currentSyllable,
       pointsEarned: earned, players: room.players,
+      mode: room.mode || 'normal',
     });
     setTimeout(() => nextTurn(roomCode, false), 900);
   });

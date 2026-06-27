@@ -285,6 +285,28 @@ body::before {
 .tc0{color:#FF4757;} .tc1{color:#4fa3ff;} .tc2{color:#2ED573;} .tc3{color:#FFA502;}
 .tc4{color:#b39dff;} .tc5{color:#FF6B81;} .tc6{color:#2BCBBA;} .tc7{color:#ECCC68;}
 
+/* ══════ MODE SELECTOR ══════ */
+.mode-selector { background: var(--card); border-radius: 14px; padding: 13px 14px; border: 1px solid #1e1c30; margin-bottom: 16px; }
+.mode-label { font-size: .72rem; color: var(--muted); font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+.mode-btns { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 7px; }
+.mode-btn { flex: 1; min-width: 80px; padding: 8px 10px; background: #0a091a; border: 2px solid #1e1c30; border-radius: 10px; color: #888; font-size: .82rem; font-weight: 800; font-family: 'Nunito',sans-serif; cursor: pointer; transition: border-color .15s, color .15s; }
+.mode-btn.active { border-color: var(--gold); color: var(--gold); background: rgba(255,215,0,.06); }
+.mode-btn:disabled { opacity: .4; cursor: default; }
+.mode-desc { font-size: .75rem; color: #666; font-style: italic; }
+.mode-badge { font-size: .65rem; background: rgba(255,215,0,.15); color: var(--gold); border: 1px solid rgba(255,215,0,.3); border-radius: 5px; padding: 1px 6px; font-weight: 800; vertical-align: middle; }
+
+/* ══════ 2-LETTERS DISPLAY ══════ */
+.letter-chips { display: flex; align-items: center; justify-content: center; gap: 7px; }
+.letter-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: clamp(36px,8vw,56px); height: clamp(36px,8vw,56px);
+  background: rgba(255,215,0,.1); border: 2px solid var(--gold);
+  border-radius: 10px; font-size: clamp(1.2rem,3.5vw,2rem); font-weight: 900;
+  color: var(--gold); text-shadow: 0 0 16px rgba(255,215,0,.9);
+  box-shadow: 0 0 12px rgba(255,215,0,.25);
+}
+.plus-sep { font-size: clamp(1rem,2.5vw,1.5rem); color: var(--muted); font-weight: 900; }
+
 /* ══════ RESPONSIVE ══════ */
 @media(max-width:480px) {
   .table-felt { width: min(58%,220px); }

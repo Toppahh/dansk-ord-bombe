@@ -4,7 +4,7 @@ let myId = null, isHost = false, currentRoomCode = null;
 let currentPlayers = [], maxTime = 12;
 let soundEnabled = true, chatOpen = false;
 let tickTimeoutId = null, tickDelay = 1000;
-let currentActivePlayerId = null, currentSyllable = '';
+let currentActivePlayerId = null, currentSyllable = '', currentMode = 'normal';
 
 // ══════ SOUND ENGINE ══════
 let audioCtx = null;
@@ -40,17 +40,13 @@ function noise(dur, vol) {
   } catch(e) {}
 }
 
-// Typewriter sound — different pitch each key for character
 const KEY_FREQS = [180,195,210,225,240,260,280,300,320,340,360,380];
 function sfxKey() {
   const f = KEY_FREQS[Math.floor(Math.random()*KEY_FREQS.length)];
   osc(f, 'square', 0.038, 0.055);
-  // Subtle second harmonic
   osc(f*1.5, 'square', 0.025, 0.02);
 }
-function sfxKeyDelete() {
-  osc(120, 'sawtooth', 0.04, 0.045);
-}
+function sfxKeyDelete() { osc(120, 'sawtooth', 0.04, 0.045); }
 function sfxTick(t) {
   const freq = t <= 3 ? 1500 : t <= 5 ? 1200 : 900;
   const vol  = t <= 3 ? 0.3  : 0.18;
@@ -63,7 +59,6 @@ function sfxNewTurn() { osc(440,'sine',.07,.12); osc(550,'sine',.07,.1,.06); }
 function sfxChat() { osc(900,'sine',.08,.09); osc(1100,'sine',.06,.07,.05); }
 function sfxElim() { [[370,0],[290,.14],[210,.3],[130,.5]].forEach(([f,d])=>osc(f,'sawtooth',.18,.18,d)); }
 
-// Ticking that accelerates
 function startTicking(timeLeft) {
   stopTicking();
   const baseDelay = timeLeft <= 2 ? 140 : timeLeft <= 4 ? 260 : timeLeft <= 7 ? 450 : 900;
@@ -78,7 +73,6 @@ function startTicking(timeLeft) {
 function stopTicking() {
   if (tickTimeoutId) { clearTimeout(tickTimeoutId); tickTimeoutId = null; }
 }
-
 function toggleSound() {
   soundEnabled = !soundEnabled;
   const btn = document.getElementById('soundBtn');
@@ -100,34 +94,85 @@ function escRx(s) { return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
 const FUN_OK   = ['🔥 Fedt ord!','💪 Godt klaret!','😎 Nice!','🎯 Spot on!','✨ Smart!','🚀 Woop!','👏 Klart!','💥 Bingo!','🥳 Ja!','⚡ Hurtig!'];
 const FUN_BOOM = ['💥 BOOM!','🧨 Pang!','😬 Åh nej!','🙈 Au!','💣 Kaboom!'];
 
-// ══════ CENTER SYLLABLE / TYPING DISPLAY ══════
-function updateCenterDisplay(text, syllable) {
-  const display = document.getElementById('sylText');
-  const hint    = document.getElementById('sylHint');
-  if (!text) {
-    display.innerHTML = '';
-    display.textContent = syllable.toUpperCase();
-    display.className = 'syl-big';
-    if (hint) hint.textContent = 'Skriv et ord med:';
-    return;
-  }
-  // Show typed word with syllable highlighted
-  const lower = text.toLowerCase();
-  const rx = new RegExp('('+escRx(syllable.toLowerCase())+')', 'g');
-  const hasMatch = rx.test(lower);
-  const highlighted = lower.replace(new RegExp('('+escRx(syllable.toLowerCase())+')', 'g'), '<span class="syl-match">$1</span>');
-  display.innerHTML = highlighted + '<span class="type-cursor">|</span>';
-  display.className = 'syl-big typing-mode';
-  if (hint) hint.textContent = hasMatch ? '✓ Godt!' : 'Skriver:';
+const MODE_INFO = {
+  normal:  { desc: 'Skriv et dansk ord der indeholder stavelsen',              badge: '💣 Normal'  },
+  names:   { desc: 'Skriv et dansk navn (fornavn/bynavn) der starter med bogstavet', badge: '📛 Navne'   },
+  letters: { desc: 'Skriv et dansk ord der indeholder BEGGE bogstaver (i vilkårlig rækkefølge)', badge: '🔤 2 Bog.' },
+};
+
+// ══════ MODE SELECTOR ══════
+function setMode(mode) {
+  if (!isHost) return;
+  socket.emit('set-mode', { roomCode: currentRoomCode, mode });
+}
+function applyMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+  const desc = document.getElementById('modeDesc');
+  if (desc) desc.textContent = MODE_INFO[mode]?.desc || '';
+  const badge = document.getElementById('modeBadge');
+  if (badge) badge.textContent = MODE_INFO[mode]?.badge || '';
+}
+function setModeBtnsEnabled(enabled) {
+  document.querySelectorAll('.mode-btn').forEach(b => b.disabled = !enabled);
 }
 
-function resetCenterDisplay(syllable, extraClass = '') {
+// ══════ CENTER DISPLAY ══════
+function sylDisplay(syllable, mode, extraClass) {
   const display = document.getElementById('sylText');
   const hint    = document.getElementById('sylHint');
-  display.innerHTML = '';
-  display.textContent = syllable.toUpperCase();
-  display.className = 'syl-big' + (extraClass ? ' ' + extraClass : '');
-  if (hint) hint.textContent = 'Skriv et ord med:';
+  if (hint) {
+    if (mode === 'names')   hint.textContent = 'Skriv et navn der starter med:';
+    else if (mode==='letters') hint.textContent = 'Brug begge bogstaver:';
+    else                    hint.textContent = 'Skriv et ord med:';
+  }
+  if (mode === 'letters') {
+    const parts = syllable.split('+');
+    const l1 = (parts[0]||'?').toUpperCase();
+    const l2 = (parts[1]||'?').toUpperCase();
+    display.innerHTML = `<span class="letter-chips"><span class="letter-chip">${l1}</span><span class="plus-sep">+</span><span class="letter-chip">${l2}</span></span>`;
+  } else {
+    display.innerHTML = '';
+    display.textContent = syllable.toUpperCase ? syllable.toUpperCase() : syllable;
+  }
+  display.className = 'syl-big' + (extraClass ? ' '+extraClass : '');
+}
+
+function updateCenterDisplay(text, syllable, mode) {
+  const display = document.getElementById('sylText');
+  const hint    = document.getElementById('sylHint');
+  if (!text) { sylDisplay(syllable, mode); return; }
+  const lower = text.toLowerCase();
+
+  if (mode === 'letters') {
+    const parts = syllable.split('+');
+    const l1 = parts[0], l2 = parts[1];
+    const hasL1 = lower.includes(l1), hasL2 = lower.includes(l2);
+    if (hint) hint.textContent = (hasL1 && hasL2) ? '✓ Begge bogstaver!' : 'Skriver:';
+    let html = '';
+    for (const ch of lower) {
+      if (ch === l1 || ch === l2) html += `<span class="syl-match">${ch}</span>`;
+      else html += ch;
+    }
+    display.innerHTML = html + '<span class="type-cursor">|</span>';
+    display.className = 'syl-big typing-mode';
+
+  } else if (mode === 'names') {
+    const startLetter = syllable.toLowerCase();
+    if (hint) hint.textContent = lower.startsWith(startLetter) ? '✓ Godt start!' : 'Skriver:';
+    const first = lower[0] || '';
+    display.innerHTML = `<span class="syl-match">${first}</span>${lower.slice(1)}<span class="type-cursor">|</span>`;
+    display.className = 'syl-big typing-mode';
+
+  } else {
+    const syl = syllable.toLowerCase();
+    if (hint) hint.textContent = lower.includes(syl) ? '✓ Godt!' : 'Skriver:';
+    const highlighted = lower.replace(new RegExp('('+escRx(syl)+')', 'g'), '<span class="syl-match">$1</span>');
+    display.innerHTML = highlighted + '<span class="type-cursor">|</span>';
+    display.className = 'syl-big typing-mode';
+  }
 }
 
 // ══════ JOIN ══════
@@ -169,8 +214,10 @@ function renderLobby(room) {
     c.appendChild(d);
   });
   const btn=document.getElementById('startBtn'), wt=document.getElementById('waitingMsg');
-  if (isHost){btn.style.display='block';wt.style.display='none';}
-  else{btn.style.display='none';wt.style.display='block';}
+  if (isHost) { btn.style.display='block'; wt.style.display='none'; }
+  else        { btn.style.display='none';  wt.style.display='block'; }
+  setModeBtnsEnabled(isHost);
+  applyMode(room.mode || currentMode || 'normal');
 }
 function startGame() { socket.emit('start-game', { roomCode: currentRoomCode }); }
 
@@ -276,28 +323,28 @@ let lastInputLen = 0;
 function setInputActive(active) {
   document.getElementById('wordInputWrap').style.display = active ? 'flex' : 'none';
   document.getElementById('notYourTurn').style.display   = active ? 'none' : 'block';
-  if (active) { const inp=document.getElementById('wordInput'); inp.value=''; lastInputLen=0; setTimeout(()=>inp.focus(),80); }
+  if (active) {
+    const inp=document.getElementById('wordInput');
+    inp.value=''; lastInputLen=0;
+    inp.placeholder = currentMode==='names' ? 'Skriv et dansk navn...' : 'Skriv et dansk ord...';
+    setTimeout(()=>inp.focus(),80);
+  }
 }
 function submitWord() {
   const word = document.getElementById('wordInput').value.trim().toLowerCase();
   if (!word) return;
   socket.emit('submit-word', { roomCode: currentRoomCode, word });
   document.getElementById('wordInput').value = '';
-  updateCenterDisplay('', currentSyllable);
+  updateCenterDisplay('', currentSyllable, currentMode);
 }
 document.getElementById('wordInput').addEventListener('keydown', e => { if (e.key==='Enter') submitWord(); });
-
-// Live typing → center display + typewriter sound
 document.getElementById('wordInput').addEventListener('input', e => {
   const text = e.target.value;
   const len = text.length;
-  // Sound: keypress or delete
   if (len > lastInputLen) sfxKey();
   else if (len < lastInputLen) sfxKeyDelete();
   lastInputLen = len;
-  // Update center
-  updateCenterDisplay(text, currentSyllable);
-  // Broadcast to others
+  updateCenterDisplay(text, currentSyllable, currentMode);
   socket.emit('typing-preview', { roomCode: currentRoomCode, text });
 });
 
@@ -307,11 +354,20 @@ function showFeedback(msg, isOk) {
   clearTimeout(el._t);
   el._t = setTimeout(()=>{el.textContent='';el.className='feedback-toast';}, 2800);
 }
-function addHistory(word, syllable) {
+function addHistory(word, syllable, mode) {
   const c = document.getElementById('wordHistory');
   const s = document.createElement('span'); s.className='hw';
-  const rx = new RegExp('('+escRx(syllable)+')','gi');
-  s.innerHTML = word.replace(rx,'<b>$1</b>');
+  if (mode === 'letters') {
+    const parts = syllable.split('+');
+    const l1 = parts[0], l2 = parts[1];
+    const rx = new RegExp(`(${escRx(l1)}|${escRx(l2)})`,'gi');
+    s.innerHTML = word.replace(rx,'<b>$1</b>');
+  } else if (mode === 'names') {
+    s.innerHTML = `<b>${word[0]||''}</b>${word.slice(1)}`;
+  } else {
+    const rx = new RegExp('('+escRx(syllable)+')','gi');
+    s.innerHTML = word.replace(rx,'<b>$1</b>');
+  }
   c.prepend(s);
   while (c.children.length > 22) c.removeChild(c.lastChild);
 }
@@ -399,30 +455,38 @@ socket.on('room-joined', ({ room, yourId, isHost: h }) => {
 socket.on('player-joined', ({ room }) => { renderLobby(room); });
 socket.on('player-left',   ({ players, playerName }) => {
   if (document.getElementById('screen-lobby').classList.contains('active'))
-    renderLobby({ code: currentRoomCode, players });
+    renderLobby({ code: currentRoomCode, players, mode: currentMode });
   addChatMsg('',playerName+' forlod spillet.','',true);
 });
 socket.on('new-host', ({ hostId }) => {
-  if (hostId===myId) { isHost=true; document.getElementById('startBtn').style.display='block'; document.getElementById('waitingMsg').style.display='none'; }
+  if (hostId===myId) {
+    isHost=true;
+    document.getElementById('startBtn').style.display='block';
+    document.getElementById('waitingMsg').style.display='none';
+    setModeBtnsEnabled(true);
+  }
 });
+socket.on('mode-changed', ({ mode }) => { applyMode(mode); });
 socket.on('error-msg', ({ message }) => { showErr(message); showFeedback(message,false); });
 
-socket.on('game-started', ({ players }) => {
-  currentPlayers=players; stopTicking();
+socket.on('game-started', ({ players, mode }) => {
+  currentPlayers=players; currentMode=mode||'normal'; stopTicking();
+  applyMode(currentMode);
   document.getElementById('wordHistory').innerHTML='';
   document.getElementById('chatMessages').innerHTML='';
   showScreen('screen-game');
   requestAnimationFrame(()=>requestAnimationFrame(()=>{
     buildSeats(players);
-    currentSyllable='—'; resetCenterDisplay('—');
+    currentSyllable='—'; sylDisplay('—', currentMode);
     document.getElementById('currentLabel').textContent='🎲 Starter...';
     setInputActive(false); updateBomb(12,12);
   }));
   addChatMsg('','Spillet er startet! God fornøjelse 💣','',true);
 });
 
-socket.on('new-turn', ({ currentPlayerId, currentPlayerName, syllable, timeLeft, maxTime: mt, players, keptSyllable, round }) => {
+socket.on('new-turn', ({ currentPlayerId, currentPlayerName, syllable, timeLeft, maxTime: mt, players, keptSyllable, round, mode }) => {
   currentPlayers=players; currentActivePlayerId=currentPlayerId; currentSyllable=syllable;
+  if (mode) currentMode = mode;
   maxTime = mt || timeLeft;
   stopTicking();
   updateSeats(players, currentPlayerId);
@@ -434,46 +498,46 @@ socket.on('new-turn', ({ currentPlayerId, currentPlayerName, syllable, timeLeft,
   const lbl = currentPlayerId===myId ? '🎯 DIN TUR!' : `🎮 ${esc(currentPlayerName)}s tur`;
   document.getElementById('currentLabel').textContent = lbl;
 
-  resetCenterDisplay(syllable, keptSyllable ? 'same-syl' : '');
+  sylDisplay(syllable, currentMode, keptSyllable ? 'same-syl' : '');
 
-  // Speed indicator
   const speedTag = document.getElementById('speedTag');
   if (speedTag) {
     const rounds = round || 0;
-    if (rounds >= 5)  speedTag.textContent = `⚡×${Math.floor(rounds/5)}`;
-    else              speedTag.textContent = '';
+    speedTag.textContent = rounds >= 5 ? `⚡×${Math.floor(rounds/5)}` : '';
   }
 
   if (keptSyllable) {
-    showFeedback(`⚠️ Samme stavelse videre til ${esc(currentPlayerName)}!`, false);
-    addChatMsg('',`Ingen klaret "${syllable.toUpperCase()}" — videre til ${esc(currentPlayerName)}!`,'',true);
+    const label = currentMode==='letters' ? syllable.replace('+',' + ').toUpperCase() : syllable.toUpperCase();
+    showFeedback(`⚠️ Samme udfordring videre til ${esc(currentPlayerName)}!`, false);
+    addChatMsg('',`Ingen klaret "${label}" — videre til ${esc(currentPlayerName)}!`,'',true);
   }
   document.getElementById('feedback').textContent='';
 });
 
 socket.on('timer-tick', ({ timeLeft }) => updateBomb(timeLeft, maxTime));
 
-socket.on('word-accepted', ({ playerId, playerName, word, syllable, pointsEarned, players }) => {
-  stopTicking(); updateSeats(players,null);
-  addHistory(word, syllable);
+socket.on('word-accepted', ({ playerId, playerName, word, syllable, pointsEarned, players, mode }) => {
+  stopTicking();
+  const m = mode || currentMode;
+  updateSeats(players,null);
+  addHistory(word, syllable, m);
   confetti(); sfxSuccess();
   showFeedback(rand(FUN_OK)+` +${pointsEarned}pt ⭐`, true);
   showPointsPopup(playerId, pointsEarned);
   const isMe = playerId===myId;
   addChatMsg('',`${esc(playerName)} → "${word}" ${isMe?'🎯':''} +${pointsEarned}pt`,`tc${playerColorIdx(playerId)}`,true);
-  resetCenterDisplay(syllable);
+  sylDisplay(syllable, currentMode);
 });
 
 socket.on('word-rejected', ({ message }) => {
   sfxFail(); showFeedback('❌ '+message, false);
   const inp=document.getElementById('wordInput');
-  if (inp) { inp.value=''; inp.focus(); updateCenterDisplay('',currentSyllable); }
+  if (inp) { inp.value=''; inp.focus(); updateCenterDisplay('',currentSyllable,currentMode); }
 });
 
 socket.on('player-typing', ({ playerId, text }) => {
-  // Show in center if this is the active player
   if (playerId === currentActivePlayerId && playerId !== myId) {
-    updateCenterDisplay(text, currentSyllable);
+    updateCenterDisplay(text, currentSyllable, currentMode);
   }
 });
 
@@ -505,4 +569,8 @@ socket.on('game-over', ({ winner, players }) => {
   renderGameOver(winner,players); showScreen('screen-gameover');
 });
 
-socket.on('game-reset', ({ room }) => { stopTicking(); renderLobby(room); showScreen('screen-lobby'); });
+socket.on('game-reset', ({ room }) => {
+  stopTicking();
+  isHost = room.players.find(p=>p.id===myId)?.isHost || isHost;
+  renderLobby(room); showScreen('screen-lobby');
+});
