@@ -61,8 +61,9 @@ async function checkWordInOrdnet(word) {
         signal: AbortSignal.timeout(6000),
       }
     );
-    const html = await res.text();
-    const found = res.ok && !html.toLowerCase().includes('gav ikke resultat');
+    await res.text();
+    // ordnet.dk redirects to ?select=ID only when a word is found
+    const found = res.ok && res.url.includes('select=');
     ordnetCache.set(word, found);
     if (ordnetCache.size > 3000) ordnetCache.delete(ordnetCache.keys().next().value);
     return found;
